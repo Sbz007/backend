@@ -44,5 +44,6 @@ app.use("/modelos", express.static(MODELS_DIR));
 // 🚀 Iniciar servidor (Render necesita process.env.PORT)
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 Servidor backend en http://localhost:${PORT}`);
 });
+
