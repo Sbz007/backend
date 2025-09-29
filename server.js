@@ -26,12 +26,12 @@ const storage = multer.diskStorage({
     cb(null, dir);
   },
   filename: function (req, file, cb) {
-    cb(null, file.originalname); // Se guardan con su nombre original (model.json, shard.bin, etc.)
+    cb(null, file.originalname); // Guarda como model.json y shards.bin
   }
 });
 const upload = multer({ storage: storage });
 
-// 📌 Ruta para guardar el modelo (usar POST)
+// 📌 Ruta para guardar el modelo (usa POST)
 app.post("/api/guardar-modelo/:id", upload.any(), (req, res) => {
   const id = req.params.id;
   console.log(`📥 Modelo recibido y guardado en /modelos/${id}`);
@@ -41,9 +41,13 @@ app.post("/api/guardar-modelo/:id", upload.any(), (req, res) => {
 // 📌 Servir los modelos guardados
 app.use("/modelos", express.static(MODELS_DIR));
 
-// 🚀 Iniciar servidor (Render necesita process.env.PORT)
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor backend en http://localhost:${PORT}`);
+// ✅ Ruta de prueba
+app.get("/", (req, res) => {
+  res.send("🚀 Backend activo y corriendo en Render");
 });
 
+// 🔥 Puerto dinámico para Render
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
+});
