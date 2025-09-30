@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -76,7 +77,7 @@ app.post("/api/guardar-modelo/:id", upload.any(), (req, res) => {
 });
 
 // ------------------------
-// API para obtener lista de modelos con nombre y archivos
+// API para obtener lista de modelos con nombre, archivos y capturas
 // ------------------------
 app.get("/api/modelos", (req, res) => {
   const carpetas = fs.readdirSync(MODELS_DIR);
@@ -87,8 +88,17 @@ app.get("/api/modelos", (req, res) => {
       const data = JSON.parse(fs.readFileSync(infoPath, "utf-8"));
       nombre = data.nombre;
     }
+
     const archivos = fs.readdirSync(path.join(MODELS_DIR, id));
-    return { id, nombre, archivos };
+
+    // Leer capturas si existe
+    let capturas = [];
+    const capturasPath = path.join(MODELS_DIR, id, "capturas.json");
+    if (fs.existsSync(capturasPath)) {
+      capturas = JSON.parse(fs.readFileSync(capturasPath, "utf-8"));
+    }
+
+    return { id, nombre, archivos, capturas };
   });
   res.json(modelos);
 });
@@ -118,7 +128,7 @@ app.get("/modelos", (req, res) => {
 app.use("/modelos", express.static(MODELS_DIR));
 
 // Ruta de prueba
-app.get("/", (req, res) => res.send("🚀 Backend activo y corriendo en Render"));
+app.get("/", (req, res) => res.send("🚀 Backend activo y corriendo"));
 
 // Puerto dinámico
 const PORT = process.env.PORT || 4000;
