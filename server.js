@@ -43,7 +43,11 @@ app.post("/api/modelos", (req, res) => {
   const dir = path.join(MODELS_DIR, id);
   fs.mkdirSync(dir, { recursive: true });
 
-  res.json({ modelo: { id, nombre } });
+  // Guardar info.json con id y nombre
+  const info = { id, nombre };
+  fs.writeFileSync(path.join(dir, "info.json"), JSON.stringify(info, null, 2));
+
+  res.json({ modelo: info });
 });
 
 // ------------------------
@@ -64,6 +68,7 @@ app.post("/api/capturas", (req, res) => {
 
 // ------------------------
 // Subir archivos del modelo (opcional)
+// ------------------------
 app.post("/api/guardar-modelo/:id", upload.any(), (req, res) => {
   const id = req.params.id;
   console.log(`📥 Modelo recibido y guardado en /modelos/${id}`);
@@ -71,7 +76,25 @@ app.post("/api/guardar-modelo/:id", upload.any(), (req, res) => {
 });
 
 // ------------------------
-// Endpoint para ver todos los modelos y archivos
+// API para obtener lista de modelos con nombre y archivos
+// ------------------------
+app.get("/api/modelos", (req, res) => {
+  const carpetas = fs.readdirSync(MODELS_DIR);
+  const modelos = carpetas.map((id) => {
+    const infoPath = path.join(MODELS_DIR, id, "info.json");
+    let nombre = `Modelo ${id}`;
+    if (fs.existsSync(infoPath)) {
+      const data = JSON.parse(fs.readFileSync(infoPath, "utf-8"));
+      nombre = data.nombre;
+    }
+    const archivos = fs.readdirSync(path.join(MODELS_DIR, id));
+    return { id, nombre, archivos };
+  });
+  res.json(modelos);
+});
+
+// ------------------------
+// Endpoint para ver todos los modelos y archivos en HTML (debug)
 // ------------------------
 app.get("/modelos", (req, res) => {
   const carpetas = fs.readdirSync(MODELS_DIR);
@@ -80,8 +103,10 @@ app.get("/modelos", (req, res) => {
   carpetas.forEach((id) => {
     const dir = path.join(MODELS_DIR, id);
     const archivos = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
-    html += `<li><strong>Modelo ${id}</strong><br>`;
-    html += archivos.map(f => `<a href="/modelos/${id}/${f}" target="_blank">${f}</a>`).join(", ");
+    html += `<li><strong>${id}</strong><br>`;
+    html += archivos
+      .map(f => `<a href="/modelos/${id}/${f}" target="_blank">${f}</a>`)
+      .join(", ");
     html += `</li>`;
   });
 
