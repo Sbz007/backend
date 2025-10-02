@@ -2,134 +2,118 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const mongoose = require("mongoose");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Carpeta donde se guardarán los modelos
-const MODELS_DIR = path.join(__dirname, "modelos");
-if (!fs.existsSync(MODELS_DIR)) {
-  fs.mkdirSync(MODELS_DIR);
-}
+// ------------------------
+// 🔗 Conexión a MongoDB
+// ------------------------
+mongoose.connect(process.env.MONGODB_URL, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log("✅ Conectado a MongoDB"))
+.catch((err) => console.error("❌ Error de conexión:", err));
 
 // ------------------------
-// MULTER: subir archivos de modelos
+// 📦 Esquemas y Modelos
 // ------------------------
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const modelId = req.params.id;
-    const dir = path.join(MODELS_DIR, modelId);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.originalname);
-  }
-});
+const ModeloSchema = new mongoose.Schema({
+  nombre: String,
+  capturas: { type: Array, default: [] },
+  archivos: { type: Array, default: [] },
+}, { timestamps: true });
+
+const Modelo = mongoose.model("Modelo", ModeloSchema);
+
+// ------------------------
+// MULTER (guardar archivos en memoria)
+// ------------------------
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // ------------------------
-// Crear carpeta para un modelo nuevo
+// Crear un nuevo modelo
 // ------------------------
-app.post("/api/modelos", (req, res) => {
-  const { nombre } = req.body;
-  if (!nombre) return res.status(400).json({ error: "Falta nombre" });
+app.post("/api/modelos", async (req, res) => {
+  try {
+    const { nombre } = req.body;
+    if (!nombre) return res.status(400).json({ error: "Falta nombre" });
 
-  const id = Date.now().toString();
-  const dir = path.join(MODELS_DIR, id);
-  fs.mkdirSync(dir, { recursive: true });
+    const modelo = new Modelo({ nombre });
+    await modelo.save();
 
-  // Guardar info.json con id y nombre
-  const info = { id, nombre };
-  fs.writeFileSync(path.join(dir, "info.json"), JSON.stringify(info, null, 2));
-
-  res.json({ modelo: info });
+    res.json({ modelo });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ------------------------
-// Guardar capturas en archivo
+// Guardar capturas en Mongo
 // ------------------------
-app.post("/api/capturas", (req, res) => {
-  const { modeloId, data } = req.body;
-  if (!modeloId || !data) return res.status(400).json({ error: "Faltan datos" });
+app.post("/api/capturas", async (req, res) => {
+  try {
+    const { modeloId, data } = req.body;
+    if (!modeloId || !data) return res.status(400).json({ error: "Faltan datos" });
 
-  const dir = path.join(MODELS_DIR, modeloId);
-  if (!fs.existsSync(dir)) return res.status(404).json({ error: "Modelo no encontrado" });
+    const modelo = await Modelo.findById(modeloId);
+    if (!modelo) return res.status(404).json({ error: "Modelo no encontrado" });
 
-  const filePath = path.join(dir, "capturas.json");
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    modelo.capturas = data;
+    await modelo.save();
 
-  res.json({ message: "Capturas guardadas" });
+    res.json({ message: "✅ Capturas guardadas" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ------------------------
-// Subir archivos del modelo (opcional)
+// Subir archivos al modelo
 // ------------------------
-app.post("/api/guardar-modelo/:id", upload.any(), (req, res) => {
-  const id = req.params.id;
-  console.log(`📥 Modelo recibido y guardado en /modelos/${id}`);
-  res.json({ message: `Modelo ${id} guardado correctamente` });
+app.post("/api/guardar-modelo/:id", upload.any(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const modelo = await Modelo.findById(id);
+    if (!modelo) return res.status(404).json({ error: "Modelo no encontrado" });
+
+    // Guardar nombres de archivos (puedes almacenar binarios si necesitas)
+    const archivos = req.files.map(file => file.originalname);
+    modelo.archivos.push(...archivos);
+
+    await modelo.save();
+
+    res.json({ message: `✅ Archivos guardados en modelo ${id}`, archivos });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ------------------------
-// API para obtener lista de modelos con nombre, archivos y capturas
+// Obtener lista de modelos
 // ------------------------
-app.get("/api/modelos", (req, res) => {
-  const carpetas = fs.readdirSync(MODELS_DIR);
-  const modelos = carpetas.map((id) => {
-    const infoPath = path.join(MODELS_DIR, id, "info.json");
-    let nombre = `Modelo ${id}`;
-    if (fs.existsSync(infoPath)) {
-      const data = JSON.parse(fs.readFileSync(infoPath, "utf-8"));
-      nombre = data.nombre;
-    }
-
-    const archivos = fs.readdirSync(path.join(MODELS_DIR, id));
-
-    // Leer capturas si existe
-    let capturas = [];
-    const capturasPath = path.join(MODELS_DIR, id, "capturas.json");
-    if (fs.existsSync(capturasPath)) {
-      capturas = JSON.parse(fs.readFileSync(capturasPath, "utf-8"));
-    }
-
-    return { id, nombre, archivos, capturas };
-  });
-  res.json(modelos);
+app.get("/api/modelos", async (req, res) => {
+  try {
+    const modelos = await Modelo.find();
+    res.json(modelos);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ------------------------
-// Endpoint para ver todos los modelos y archivos en HTML (debug)
-// ------------------------
-app.get("/modelos", (req, res) => {
-  const carpetas = fs.readdirSync(MODELS_DIR);
-  let html = "<h1>Modelos guardados</h1><ul>";
-
-  carpetas.forEach((id) => {
-    const dir = path.join(MODELS_DIR, id);
-    const archivos = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
-    html += `<li><strong>${id}</strong><br>`;
-    html += archivos
-      .map(f => `<a href="/modelos/${id}/${f}" target="_blank">${f}</a>`)
-      .join(", ");
-    html += `</li>`;
-  });
-
-  html += "</ul>";
-  res.send(html);
-});
-
-// Servir archivos de modelos
-app.use("/modelos", express.static(MODELS_DIR));
-
 // Ruta de prueba
-app.get("/", (req, res) => res.send("🚀 Backend activo y corriendo"));
+// ------------------------
+app.get("/", (req, res) => res.send("🚀 Backend con MongoDB activo y corriendo"));
 
+// ------------------------
 // Puerto dinámico
+// ------------------------
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`🚀 Servidor backend en http://localhost:${PORT}`)
+);
