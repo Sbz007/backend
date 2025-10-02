@@ -1,4 +1,8 @@
 // server.js
+console.log("🔍 Variables de entorno disponibles:");
+console.log(process.env);
+console.log("👉 MONGODB_URL:", process.env.MONGODB_URL);
+
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
