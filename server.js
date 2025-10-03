@@ -83,10 +83,20 @@ app.post("/api/capturas", (req, res) => {
   res.json({ message: "Capturas guardadas" });
 });
 
-// Subir archivos de un modelo
-app.post("/api/guardar-modelo/:id", upload.any(), (req, res) => {
+// Subir modelo TensorFlow (model.json + .bin)
+app.post("/api/guardar-modelo/:id", upload.array("files"), (req, res) => {
   const id = req.params.id;
-  res.json({ message: `Modelo ${id} guardado correctamente` });
+  const dir = path.join(MODELS_DIR, id);
+
+  if (!fs.existsSync(dir)) {
+    return res.status(404).json({ error: "Modelo no encontrado" });
+  }
+
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: "No se subieron archivos" });
+  }
+
+  res.json({ message: `Modelo ${id} guardado correctamente`, files: req.files.map(f => f.originalname) });
 });
 
 // Listar modelos
@@ -100,7 +110,9 @@ app.get("/api/modelos", (req, res) => {
       nombre = data.nombre;
     }
 
-    const archivos = fs.readdirSync(path.join(MODELS_DIR, id));
+    const archivos = fs.existsSync(path.join(MODELS_DIR, id))
+      ? fs.readdirSync(path.join(MODELS_DIR, id))
+      : [];
     let capturas = [];
     const capturasPath = path.join(MODELS_DIR, id, "capturas.json");
     if (fs.existsSync(capturasPath)) {
@@ -113,13 +125,13 @@ app.get("/api/modelos", (req, res) => {
   res.json(modelos);
 });
 
+// Servir modelos TensorFlow directamente
+app.use("/modelos", express.static(MODELS_DIR));
+
 // Ruta de prueba
 app.get("/", (req, res) => {
-  res.send("🚀 Backend activo y corriendo con Mongo + Modelos");
+  res.send("🚀 Backend activo y corriendo con Mongo + Modelos TF");
 });
-
-// Servir archivos
-app.use("/modelos", express.static(MODELS_DIR));
 
 // Iniciar server
 app.listen(PORT, () => {
