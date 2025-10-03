@@ -1,3 +1,4 @@
+// server.js
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
@@ -84,7 +85,7 @@ app.post("/api/capturas", (req, res) => {
 });
 
 // Subir modelo TensorFlow (model.json + .bin)
-app.post("/api/guardar-modelo/:id", upload.array("files"), (req, res) => {
+app.post("/api/guardar-modelo/:id", upload.array("file"), (req, res) => {
   const id = req.params.id;
   const dir = path.join(MODELS_DIR, id);
 
