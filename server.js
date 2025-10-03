@@ -1,7 +1,13 @@
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import cors from "cors";
+// Configurar CORS para permitir llamadas desde tu frontend
+app.use(cors({
+  origin: ["http://localhost:3000", "https://TU_FRONTEND_DEPLOYADO.com"], 
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
 import multer from "multer";
 import path from "path";
 import fs from "fs";
