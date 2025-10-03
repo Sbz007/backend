@@ -1,8 +1,8 @@
-// server.js
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
+import multer from "multer";
 import path from "path";
 import fs from "fs";
 
@@ -10,24 +10,14 @@ import fs from "fs";
 dotenv.config();
 
 const app = express();
-
-// Configurar CORS
-app.use(
-  cors({
-    origin: ["http://localhost:3000", "https://TU_FRONTEND_DEPLOYADO.com"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-
-// Permitir JSON grande para modelos TF
-app.use(express.json({ limit: "200mb" }));
+app.use(cors());
+app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 const MONGO_URL = process.env.MONGODB_URL;
 
 if (!MONGO_URL) {
-  console.error("❌ No se encontró la variable MONGODB_URL");
+  console.error("❌ No se encontró la variable MONGODB_URL en .env ni en Railway");
   process.exit(1);
 }
 
@@ -37,9 +27,21 @@ mongoose
   .then(() => console.log("✅ Conectado a MongoDB"))
   .catch((err) => console.error("❌ Error de conexión:", err));
 
-// Directorio para modelos
+// --- Directorio local para modelos (Railway permite usar /app/modelos)
 const MODELS_DIR = path.join(process.cwd(), "modelos");
 if (!fs.existsSync(MODELS_DIR)) fs.mkdirSync(MODELS_DIR);
+
+// --- Configuración de Multer (para subir archivos)
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const modelId = req.params.id;
+    const dir = path.join(MODELS_DIR, modelId);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => cb(null, file.originalname),
+});
+const upload = multer({ storage });
 
 // ------------------- RUTAS -------------------
 
@@ -66,25 +68,15 @@ app.post("/api/capturas", (req, res) => {
   const dir = path.join(MODELS_DIR, modeloId);
   if (!fs.existsSync(dir)) return res.status(404).json({ error: "Modelo no encontrado" });
 
-  fs.writeFileSync(path.join(dir, "capturas.json"), JSON.stringify(data, null, 2));
+  const filePath = path.join(dir, "capturas.json");
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 
   res.json({ message: "Capturas guardadas" });
 });
 
-// Guardar modelo TensorFlow (BrowserHTTPRequest.save)
-app.post("/api/guardar-modelo/:id", (req, res) => {
+// Subir archivos de un modelo
+app.post("/api/guardar-modelo/:id", upload.any(), (req, res) => {
   const id = req.params.id;
-  const dir = path.join(MODELS_DIR, id);
-
-  if (!fs.existsSync(dir)) return res.status(404).json({ error: "Modelo no encontrado" });
-
-  const { modelTopology, weightsManifest } = req.body;
-  if (!modelTopology || !weightsManifest)
-    return res.status(400).json({ error: "Cuerpo inválido: falta modelTopology o weightsManifest" });
-
-  // Guardar modelo completo en model.json
-  fs.writeFileSync(path.join(dir, "model.json"), JSON.stringify(req.body, null, 2));
-
   res.json({ message: `Modelo ${id} guardado correctamente` });
 });
 
@@ -99,10 +91,7 @@ app.get("/api/modelos", (req, res) => {
       nombre = data.nombre;
     }
 
-    const archivos = fs.existsSync(path.join(MODELS_DIR, id))
-      ? fs.readdirSync(path.join(MODELS_DIR, id))
-      : [];
-
+    const archivos = fs.readdirSync(path.join(MODELS_DIR, id));
     let capturas = [];
     const capturasPath = path.join(MODELS_DIR, id, "capturas.json");
     if (fs.existsSync(capturasPath)) {
@@ -115,13 +104,13 @@ app.get("/api/modelos", (req, res) => {
   res.json(modelos);
 });
 
-// Servir modelos TensorFlow directamente
-app.use("/modelos", express.static(MODELS_DIR));
-
 // Ruta de prueba
 app.get("/", (req, res) => {
-  res.send("🚀 Backend activo y corriendo con Mongo + Modelos TF");
+  res.send("🚀 Backend activo y corriendo con Mongo + Modelos");
 });
+
+// Servir archivos
+app.use("/modelos", express.static(MODELS_DIR));
 
 // Iniciar server
 app.listen(PORT, () => {
