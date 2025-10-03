@@ -21,7 +21,7 @@ app.use(
 );
 
 // Permitir JSON grande para modelos TF
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "200mb" }));
 
 const PORT = process.env.PORT || 8080;
 const MONGO_URL = process.env.MONGODB_URL;
@@ -71,7 +71,7 @@ app.post("/api/capturas", (req, res) => {
   res.json({ message: "Capturas guardadas" });
 });
 
-// Guardar modelo TensorFlow desde BrowserHTTPRequest
+// Guardar modelo TensorFlow (BrowserHTTPRequest.save)
 app.post("/api/guardar-modelo/:id", (req, res) => {
   const id = req.params.id;
   const dir = path.join(MODELS_DIR, id);
@@ -80,8 +80,9 @@ app.post("/api/guardar-modelo/:id", (req, res) => {
 
   const { modelTopology, weightsManifest } = req.body;
   if (!modelTopology || !weightsManifest)
-    return res.status(400).json({ error: "Cuerpo inválido" });
+    return res.status(400).json({ error: "Cuerpo inválido: falta modelTopology o weightsManifest" });
 
+  // Guardar modelo completo en model.json
   fs.writeFileSync(path.join(dir, "model.json"), JSON.stringify(req.body, null, 2));
 
   res.json({ message: `Modelo ${id} guardado correctamente` });
